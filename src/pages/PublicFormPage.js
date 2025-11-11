@@ -1,78 +1,85 @@
-import { useState } from 'react';
-import { supabase } from './utils/supabaseClient';
+// src/pages/PublicHomePage.js
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../utils/supabaseClient';
+import { Link } from 'react-router-dom'; // Para los botones de "Aplicar"
 
-function PublicForm({ puestoId }) {
-  const [nombre, setNombre] = useState('');
-  const [email, setEmail] = useState('');
-  const [cvFile, setCvFile] = useState(null);
-  const [loading, setLoading] = useState(false);
+export default function PublicHomePage() {
+  const [puestos, setPuestos] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleFileChange = (e) => {
-    if (e.target.files.length > 0) {
-      setCvFile(e.target.files[0]);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!cvFile) {
-      alert('¡Debes subir un CV!');
-      return;
-    }
-    setLoading(true);
-
-    try {
-      // 1. Subir el CV a Storage
-      // Creamos un path único (ej: puesto_id/nombre_archivo_timestamp)
-      const fileExt = cvFile.name.split('.').pop();
-      const fileName = `${Date.now()}.${fileExt}`;
-      const filePath = `public/${puestoId}/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('cvs') // El bucket que creamos
-        .upload(filePath, cvFile);
-
-      if (uploadError) throw uploadError;
-
-      // 2. Obtener la URL pública (temporalmente)
-      // En un caso real, usarías RLS para crear una URL firmada y segura
-      const { data: urlData } = supabase.storage
-        .from('cvs')
-        .getPublicUrl(filePath);
-
-      const cv_url = urlData.publicUrl;
-
-      // 3. Insertar el candidato en la base de datos
-      const { error: insertError } = await supabase
-        .from('Candidatos')
-        .insert({
-          nombre_completo: nombre,
-          email: email,
-          cv_url: cv_url, // Guardamos la URL del CV
-          puesto_id: puestoId,
-          estado_actual: 'Aplicacion_Recibida', // Estado inicial
-        });
+  useEffect(() => {
+    // 1. Función asíncrona para cargar los puestos
+    async function fetchPuestos() {
+      setLoading(true);
       
-      if (insertError) throw insertError;
+      // 2. Consulta a Supabase
+      // Pedimos solo los puestos que cumplan la política RLS (Abiertos)
+      const { data, error } = await supabase
+        .from('puestos')
+        .select('id, titulo, descripcion'); // Traemos solo lo que necesitamos
 
-      alert('¡Aplicación enviada con éxito!');
-      // Limpiar formulario...
-
-    } catch (error) {
-      console.error('Error aplicando:', error.message);
-      alert(`Error: ${error.message}`);
-    } finally {
+      if (error) {
+        console.error('Error cargando los puestos:', error);
+      } else {
+        setPuestos(data);
+      }
+      
       setLoading(false);
     }
-  };
 
-  // ... Aquí va tu JSX con el formulario ...
-  // <form onSubmit={handleSubmit}>
-  //   <input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} />
-  //   <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-  //   <input type="file" accept=".pdf,.doc,.docx" onChange={handleFileChange} />
-  //   <button type="submit" disabled={loading}>
-  //     {loading ? 'Enviando...' : 'Aplicar'}
-  //   </button>
-  // </form>
+    fetchPuestos();
+  }, []); // El array vacío [] significa que esto se ejecuta 1 sola vez
+
+  // 3. Renderizado condicional
+  if (loading) {
+    return <p>Cargando vacantes...</p>;
+  }
+
+  if (puestos.length === 0) {
+    return <p>No hay vacantes abiertas por el momento.</p>;
+  }
+
+  // 4. Mapeo y renderizado de la lista
+  return (
+    <div>
+      <h1>Portal de Empleos</h1>
+      <p>¡Encuentra tu próximo desafío! Estas son nuestras vacantes abiertas:</p>
+      
+      <div className="lista-puestos" style={{ marginTop: '20px' }}>
+        {puestos.map((puesto) => (
+          <div 
+            key={puesto.id} 
+            style={puestoCardStyle} // Estilo para la tarjeta
+          >
+            <h3 style={{ marginTop: 0 }}>{puesto.titulo}</h3>
+            <p>{puesto.descripcion}</p>
+            
+            {/* Este Link te llevará a /apply/id-del-puesto */}
+            <Link to={`/apply/${puesto.id}`} style={applyButtonStyle}>
+              Aplicar ahora
+            </Link>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
+
+// Estilos en-línea para que se vea decente sin CSS
+const puestoCardStyle = {
+  border: '1px solid #555',
+  borderRadius: '8px',
+  padding: '16px',
+  marginBottom: '16px',
+  backgroundColor: '#3a3f4b'
+};
+
+const applyButtonStyle = {
+  display: 'inline-block',
+  padding: '10px 15px',
+  backgroundColor: '#61dafb',
+  color: '#282c34',
+  textDecoration: 'none',
+  borderRadius: '5px',
+  fontWeight: 'bold'
+};
