@@ -19,6 +19,8 @@ import DashboardPage from './pages/DashboardPage';
 // Otros
 import NotFoundPage from './pages/NotFoundPage';
 
+import CandidateDetailPage from './pages/CandidateDetailPage';
+
 function App() {
   return (
     <Routes>
@@ -40,6 +42,7 @@ function App() {
         }
       >
         <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/dashboard/candidato/:candidatoId" element={<CandidateDetailPage />} />
         {/* Aquí irían más rutas de admin, ej: /dashboard/puestos, /dashboard/usuarios */}
       </Route>
       
