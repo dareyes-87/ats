@@ -14,6 +14,9 @@ export default function CandidateDetailPage() {
   const [cvUrl, setCvUrl] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailSentMessage, setEmailSentMessage] = useState('');
+
   const [nuevoComentario, setNuevoComentario] = useState('');
 
   useEffect(() => {
@@ -87,6 +90,37 @@ export default function CandidateDetailPage() {
     }
   };
 
+  const handleSendEmailNotification = async (status) => {
+    if (!window.confirm(`¿Estás seguro de que quieres notificar...`)) {
+      return;
+    }
+
+    setIsSendingEmail(true);
+    setEmailSentMessage('');
+    
+    try {
+      // Llamamos a la Edge Function que creamos
+      // CÓDIGO CORRECTO (Con JSON.stringify)
+        const { data, error } = await supabase.functions.invoke('send-status-email', {
+          body: JSON.stringify({ // <-- ¡Esta es la corrección!
+            candidateEmail: candidato.email,
+            candidateName: candidato.nombre_completo,
+            newStatus: status
+          })
+        });
+
+      if (error) throw error;
+      
+      setEmailSentMessage(`¡Correo de "${status}" enviado con éxito!`);
+      
+    } catch (error) {
+      console.error('Error al enviar correo:', error);
+      alert(`Error al enviar correo: ${error.message}`);
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
   if (loading) return <p>Cargando detalles del candidato...</p>;
   if (!candidato) return <p>Candidato no encontrado.</p>;
 
@@ -106,6 +140,35 @@ export default function CandidateDetailPage() {
         ) : (
           <p>Error al cargar CV</p>
         )}
+
+        {/* --- AÑADE ESTOS BOTONES --- */}
+        <div style={{ border: '1px solid #555', padding: '10px', borderRadius: '5px', marginTop: '10px' }}>
+          <strong>Notificar al Candidato:</strong>
+          <br />
+          <p style={{ fontSize: '0.8em', margin: '5px 0' }}>
+            Enviar un correo pre-redactado.
+          </p>
+          
+          <button 
+            style={applyButtonStyle}
+            disabled={isSendingEmail}
+            onClick={() => handleSendEmailNotification(candidato.estado_actual)}
+          >
+            Notificar (Estado Actual)
+          </button>
+          
+          <button 
+            style={{...applyButtonStyle, backgroundColor: '#e63946', marginLeft: '10px' }}
+            disabled={isSendingEmail}
+            onClick={() => handleSendEmailNotification('Rechazado')}
+          >
+            Notificar (Rechazado)
+          </button>
+
+          {isSendingEmail && <p>Enviando correo...</p>}
+          {emailSentMessage && <p style={{ color: '#61dafb' }}>{emailSentMessage}</p>}
+        </div>
+        {/* --- FIN DEL BLOQUE A AÑADIR --- */}
 
         <hr style={{ margin: '20px 0' }} />
 
