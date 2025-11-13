@@ -3,23 +3,20 @@ import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import './App.css';
 
-// Layouts y Guardia
 import PublicLayout from './components/PublicLayout';
 import AdminLayout from './components/AdminLayout';
 import PrivateRoute from './components/PrivateRoute';
 
-// Páginas Públicas
 import PublicHomePage from './pages/PublicHomePage';
 import ApplyFormPage from './pages/ApplyFormPage';
 import LoginPage from './pages/LoginPage';
 
-// Páginas de Admin
 import DashboardPage from './pages/DashboardPage';
 
-// Otros
 import NotFoundPage from './pages/NotFoundPage';
 
 import CandidateDetailPage from './pages/CandidateDetailPage';
+import AdminPuestosPage from './pages/AdminPuestosPage';
 
 function App() {
   return (
@@ -43,6 +40,7 @@ function App() {
       >
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/dashboard/candidato/:candidatoId" element={<CandidateDetailPage />} />
+        <Route path="/dashboard/admin-puestos" element={<AdminPuestosPage />} />
         {/* Aquí irían más rutas de admin, ej: /dashboard/puestos, /dashboard/usuarios */}
       </Route>
       

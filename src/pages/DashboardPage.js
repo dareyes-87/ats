@@ -1,9 +1,9 @@
 // src/pages/DashboardPage.js
-// --- VERSIÓN NUEVA CON LÓGICA DE ROL INTERNA ---
+// --- VERSIÓN REFACTORIZADA (MÁS SIMPLE) ---
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../utils/supabaseClient';
-import { Link } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom'; // <-- Importar useOutletContext
 
 const ESTADOS_FLUJO = [
   'Aplicacion_Recibida',
@@ -15,45 +15,24 @@ const ESTADOS_FLUJO = [
 ];
 
 export default function DashboardPage() {
-  const { session } = useAuth(); // Solo traemos la sesión
+  const { session } = useAuth();
+  
+  // --- ¡OBTENEMOS EL PERFIL DESDE EL LAYOUT! ---
+  // "userProfile" es el objeto { rol, nombre_completo }
+  const { userProfile } = useOutletContext(); 
 
-  // ¡NUEVOS ESTADOS!
-  const [userProfile, setUserProfile] = useState(null); // Para el rol
   const [candidatos, setCandidatos] = useState([]);
-  const [loading, setLoading] = useState(true); // Carga de toda la página
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // EFECTO COMBINADO:
-  // 1. Carga el perfil del usuario (para saber el rol)
-  // 2. Basado en el rol, carga los candidatos
   useEffect(() => {
-    // No hacer nada si no hay sesión (esto no debería pasar por PrivateRoute, pero por si acaso)
-    if (!session) {
-      setLoading(false);
-      return;
-    }
+    // Si el perfil aún no llega (poco probable), no hacer nada
+    if (!userProfile) return;
 
-    async function fetchAllData() {
+    async function fetchCandidatos() {
       setLoading(true);
       setError(null);
       
-      // 1. Cargar el perfil (rol) del usuario
-      const { data: profileData, error: profileError } = await supabase
-        .from('usuarios')
-        .select('rol, nombre_completo')
-        .eq('id', session.user.id)
-        .single();
-
-      if (profileError) {
-        console.error('Error cargando perfil:', profileError);
-        setError('Error fatal: No se pudo cargar el perfil de usuario. ¿RLS en tabla "usuarios"?');
-        setLoading(false);
-        return;
-      }
-      
-      setUserProfile(profileData); // ¡Tenemos el rol!
-
-      // 2. Ahora, cargar candidatos BASADO en el rol
       let query = supabase
         .from('candidatos')
         .select(`
@@ -66,28 +45,28 @@ export default function DashboardPage() {
             gerente_id 
           )
         `);
-
-      if (profileData.rol === 'Gerente_Area') {
+      
+      // La lógica de roles sigue igual
+      if (userProfile.rol === 'Gerente_Area') {
         query = query
           .eq('estado_actual', 'Revision_Gerente')
           .eq('puestos.gerente_id', session.user.id);
       }
-      // Si es RH, no se aplica filtro extra
       
-      const { data: candidatesData, error: candidatesError } = await query;
+      const { data, error } = await query;
 
-      if (candidatesError) {
-        console.error('Error cargando candidatos:', candidatesError);
-        setError(candidatesError.message);
+      if (error) {
+        console.error('Error cargando candidatos:', error);
+        setError(error.message);
       } else {
-        setCandidatos(candidatesData);
+        setCandidatos(data);
       }
       
-      setLoading(false); // Terminamos toda la carga
+      setLoading(false);
     }
 
-    fetchAllData();
-  }, [session]); // Se re-ejecuta solo si la sesión cambia (ej. login/logout)
+    fetchCandidatos();
+  }, [userProfile, session]); // Se re-ejecuta si el perfil carga
 
   // --- Mover Candidato (Sin Cambios) ---
   const handleMoverCandidato = async (candidatoId, nuevoEstado) => {
@@ -107,32 +86,24 @@ export default function DashboardPage() {
     }
   };
 
-  // --- 3. Renderizado ---
+  // --- Renderizado ---
   
-  // Guardia de carga (ahora es más simple)
   if (loading) {
-    return <p>Cargando dashboard...</p>;
+    return <p>Cargando panel de candidatos...</p>;
   }
 
   if (error) {
     return <p style={{ color: 'red' }}>{error}</p>;
   }
-  
-  // Si algo salió mal y no tenemos perfil
-  if (!userProfile) {
-     return <p>Error: No se pudo cargar el perfil de usuario.</p>
-  }
 
-  // --- Renderizado Final ---
   return (
     <div>
       <h1>Dashboard de Candidatos</h1>
       <p>¡Bienvenido, {userProfile.nombre_completo || session.user.email}!</p>
       
-      {/* Contenedor del Kanban */}
+      {/* Contenedor del Kanban (sin cambios) */}
       <div style={kanbanBoardStyle}>
         {ESTADOS_FLUJO.map((estado) => (
-          // Filtra columnas para el Gerente
           (userProfile.rol === 'Reclutador_RH' || estado === 'Revision_Gerente' || estado === 'Entrevista_Agendada' || estado === 'Contratado' || estado === 'Rechazado') && (
             <div key={estado} style={kanbanColumnStyle}>
               <h3 style={columnTitleStyle}>{estado.replace('_', ' ')}</h3>
