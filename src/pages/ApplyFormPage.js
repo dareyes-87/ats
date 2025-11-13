@@ -1,154 +1,197 @@
 // src/pages/ApplyFormPage.js
-import React, { useState } from 'react';
+// --- VERSIÓN CORREGIDA (MUESTRA EL TÍTULO DEL PUESTO) ---
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabaseClient';
 
 export default function ApplyFormPage() {
-  // Hooks
-  const { puestoId } = useParams(); // Obtiene el ID del puesto desde la URL
-  const navigate = useNavigate(); // Para redirigir al usuario
-  
-  // Estados del formulario
-  const [nombre, setNombre] = useState('');
-  const [email, setEmail] = useState('');
-  const [telefono, setTelefono] = useState('');
-  const [cvFile, setCvFile] = useState(null);
+  const { puestoId } = useParams(); // Obtiene el ID de la URL
+  const navigate = useNavigate(); // Para redirigir al final
 
-  // Estados de UI
+  // --- ¡NUEVO ESTADO PARA EL TÍTULO DEL PUESTO! ---
+  const [puestoTitulo, setPuestoTitulo] = useState('');
+  const [loadingTitle, setLoadingTitle] = useState(true);
+
+  // Estados del formulario
+  const [formData, setFormData] = useState({
+    nombre_completo: '',
+    email: '',
+    telefono: '',
+  });
+  const [cvFile, setCvFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
 
-  // Manejador para el archivo CV
+  // --- ¡NUEVO USEEFFECT PARA BUSCAR EL TÍTULO! ---
+  useEffect(() => {
+    async function fetchPuestoTitle() {
+      setLoadingTitle(true);
+      const { data, error } = await supabase
+        .from('puestos')
+        .select('titulo')
+        .eq('id', puestoId)
+        .single();
+      
+      if (data) {
+        setPuestoTitulo(data.titulo);
+      } else {
+        console.error('Error fetching puesto title:', error);
+        setPuestoTitulo('Puesto no encontrado');
+      }
+      setLoadingTitle(false);
+    }
+    fetchPuestoTitle();
+  }, [puestoId]);
+  // --- FIN DEL NUEVO USEEFFECT ---
+
+  // Manejador para los inputs de texto
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  // Manejador para el archivo
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files.length > 0) {
       setCvFile(e.target.files[0]);
     }
   };
 
-  // Manejador del envío del formulario
+  // Manejador del envío
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!cvFile) {
-      setError('Debes adjuntar un archivo de CV.');
+    if (!formData.nombre_completo || !formData.email || !cvFile) {
+      setError('Nombre, email y CV son obligatorios.');
       return;
     }
 
     setLoading(true);
     setError(null);
-    setSuccess(false);
 
     try {
-      // 1. Crear un path único para el archivo
+      // 1. Subir el CV a Supabase Storage
       const fileExt = cvFile.name.split('.').pop();
-      const fileName = `${Date.now()}.${fileExt}`;
-      const filePath = `${puestoId}/${fileName}`; // Ej: 'id-del-puesto/1678886400000.pdf'
+      const fileName = `${formData.email}-${Date.now()}.${fileExt}`;
+      const filePath = `public/${fileName}`;
 
-      // 2. Subir el CV a Supabase Storage (al bucket 'cvs')
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('cvs')
+      const { error: uploadError } = await supabase.storage
+        .from('cvs') // Nombre de tu bucket
         .upload(filePath, cvFile);
 
-      if (uploadError) {
-        throw new Error(`Error subiendo CV: ${uploadError.message}`);
-      }
+      if (uploadError) throw uploadError;
 
-      // 3. Insertar el candidato en la tabla 'candidatos'
+      // 2. Insertar los datos en la tabla 'candidatos'
       const { error: insertError } = await supabase
-        .from('candidatos') // ¡Nombre de tabla en minúscula!
+        .from('candidatos')
         .insert({
-          nombre_completo: nombre,
-          email: email,
-          telefono: telefono,
           puesto_id: puestoId,
-          cv_url: uploadData.path, // ¡Guardamos el 'path', no la URL pública!
-          estado_actual: 'Aplicacion_Recibida', // Estado inicial del flujo
+          nombre_completo: formData.nombre_completo,
+          email: formData.email,
+          telefono: formData.telefono || null,
+          cv_url: filePath, // Guardamos la RUTA al archivo, no la URL
+          estado_actual: 'Aplicacion_Recibida', // Estado inicial
         });
 
-      if (insertError) {
-        throw new Error(`Error guardando candidato: ${insertError.message}`);
-      }
+      if (insertError) throw insertError;
 
-      // 4. ¡Éxito!
-      setLoading(false);
+      // 3. ¡Éxito!
       setSuccess(true);
-      // Opcional: redirigir después de unos segundos
-      setTimeout(() => navigate('/'), 3000); // Vuelve al Home
+      setLoading(false);
+      // Opcional: Redirigir después de unos segundos
+      setTimeout(() => navigate('/'), 3000);
 
     } catch (error) {
+      console.error('Error en la aplicación:', error);
       setError(error.message);
       setLoading(false);
     }
   };
 
-  // Si ya se envió, mostrar mensaje de éxito
+  // --- RENDERIZADO ---
+
   if (success) {
     return (
       <div style={formContainerStyle}>
-        <h1>¡Aplicación Enviada!</h1>
-        <p>Hemos recibido tu CV. El equipo de RH se pondrá en contacto contigo. Serás redirigido al inicio...</p>
+        <h2>¡Aplicación Enviada!</h2>
+        <p>Hemos recibido tus datos correctamente. ¡Mucha suerte!</p>
       </div>
     );
   }
 
-  // Renderizado del formulario
   return (
     <div style={formContainerStyle}>
-      <h1>Aplicar para el Puesto</h1>
-      <p>Estás aplicando para el puesto ID: {puestoId}</p>
+      
+      {/* --- ¡AQUÍ ESTÁ LA CORRECCIÓN! --- */}
+      <h2 style={{ marginBottom: '20px' }}>
+        {loadingTitle ? 'Cargando...' : `Aplicar para: ${puestoTitulo}`}
+      </h2>
 
       <form onSubmit={handleSubmit}>
         <div style={inputGroupStyle}>
           <label>Nombre Completo:</label>
-          <input
-            type="text"
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            required
+          <input 
+            type="text" 
+            name="nombre_completo" 
+            value={formData.nombre_completo}
+            onChange={handleChange}
             style={inputStyle}
+            required 
           />
         </div>
+        
         <div style={inputGroupStyle}>
           <label>Email:</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
+          <input 
+            type="email" 
+            name="email" 
+            value={formData.email}
+            onChange={handleChange}
             style={inputStyle}
+            required 
           />
         </div>
+        
         <div style={inputGroupStyle}>
           <label>Teléfono (Opcional):</label>
-          <input
-            type="tel"
-            value={telefono}
-            onChange={(e) => setTelefono(e.target.value)}
+          <input 
+            type="tel" 
+            name="telefono" 
+            value={formData.telefono}
+            onChange={handleChange}
             style={inputStyle}
           />
         </div>
+
         <div style={inputGroupStyle}>
           <label>Adjuntar CV (PDF, .doc, .docx):</label>
-          <input
-            type="file"
-            accept=".pdf,.doc,.docx"
+          <input 
+            type="file" 
+            name="cv"
             onChange={handleFileChange}
-            required
-            style={inputStyle}
+            accept=".pdf,.doc,.docx"
+            style={{ ...inputStyle, colorScheme: 'dark' }}
+            required 
           />
         </div>
-
-        {error && <p style={{ color: 'red' }}>{error}</p>}
-
-        <button type="submit" disabled={loading} style={submitButtonStyle}>
-          {loading ? 'Enviando Aplicación...' : 'Enviar Aplicación'}
+        
+        <button 
+          type="submit" 
+          disabled={loading}
+          style={applyButtonStyle}
+        >
+          {loading ? 'Enviando...' : 'Enviar Aplicación'}
         </button>
+        
+        {error && <p style={{ color: 'red', marginTop: '10px' }}>Error: {error}</p>}
       </form>
     </div>
   );
 }
 
-// Estilos básicos para el formulario
+// Estilos (los mismos de antes, para que se vea bien)
 const formContainerStyle = {
   maxWidth: '600px',
   margin: '20px auto',
@@ -159,23 +202,27 @@ const formContainerStyle = {
 
 const inputGroupStyle = {
   marginBottom: '15px',
+  display: 'flex',
+  flexDirection: 'column',
 };
 
 const inputStyle = {
-  width: 'calc(100% - 16px)', // Ajuste para padding
-  padding: '8px',
-  borderRadius: '4px',
+  padding: '10px',
+  borderRadius: '5px',
   border: '1px solid #555',
-  backgroundColor: '#fff',
-  color: '#333'
+  backgroundColor: '#4a4f5b',
+  color: 'white',
+  marginTop: '5px',
 };
 
-const submitButtonStyle = {
-  padding: '12px 20px',
+const applyButtonStyle = {
+  display: 'inline-block',
+  padding: '10px 15px',
   backgroundColor: '#61dafb',
   color: '#282c34',
-  border: 'none',
+  textDecoration: 'none',
   borderRadius: '5px',
   fontWeight: 'bold',
-  cursor: 'pointer',
+  border: 'none',
+  cursor: 'pointer'
 };

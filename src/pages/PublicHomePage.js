@@ -1,5 +1,5 @@
 // src/pages/PublicHomePage.js
-// ESTE ES EL CÓDIGO CORRECTO
+// --- VERSIÓN CORREGIDA (SOLO MUESTRA PUESTOS ABIERTOS) ---
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { Link } from 'react-router-dom'; // Para los botones de "Aplicar"
@@ -9,14 +9,13 @@ export default function PublicHomePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Función asíncrona para cargar los puestos
     async function fetchPuestos() {
       setLoading(true);
       
-      // 2. Consulta a Supabase (con 'puestos' en minúscula)
       const { data, error } = await supabase
-        .from('puestos') // Corregido a minúscula
-        .select('id, titulo, descripcion'); // Traemos solo lo que necesitamos
+        .from('puestos')
+        .select('id, titulo, descripcion')
+        .eq('estado', 'Abierto'); // <-- ¡AQUÍ ESTÁ LA CORRECCIÓN!
 
       if (error) {
         console.error('Error cargando los puestos:', error);
@@ -28,9 +27,8 @@ export default function PublicHomePage() {
     }
 
     fetchPuestos();
-  }, []); // El array vacío [] significa que esto se ejecuta 1 sola vez
+  }, []); 
 
-  // 3. Renderizado condicional
   if (loading) {
     return <p>Cargando vacantes...</p>;
   }
@@ -39,7 +37,6 @@ export default function PublicHomePage() {
     return <p>No hay vacantes abiertas por el momento.</p>;
   }
 
-  // 4. Mapeo y renderizado de la lista
   return (
     <div>
       <h1>Portal de Empleos</h1>
@@ -64,7 +61,7 @@ export default function PublicHomePage() {
   );
 }
 
-// Estilos en-línea para que se vea decente sin CSS
+// Estilos (sin cambios)
 const puestoCardStyle = {
   border: '1px solid #555',
   borderRadius: '8px',
